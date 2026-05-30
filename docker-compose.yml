@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: poster_co
+    volumes:
+      - poster_co_pg:/var/lib/postgresql/data
+
+volumes:
+  poster_co_pg:

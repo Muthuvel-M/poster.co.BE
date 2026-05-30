@@ -1,0 +1,43 @@
+# Render Blueprint — poster.co.BE
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: poster-co-be
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    region: singapore # change to oregon/frankfurt if closer to your users
+    plan: starter # use 'free' for testing (spins down when idle)
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: poster-co-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        value: poster-co
+      - key: R2_PUBLIC_URL
+        sync: false
+
+databases:
+  - name: poster-co-db
+    plan: basic-256mb # use 'free' for testing (90-day expiry on free Postgres)
+    databaseName: poster_co
+    user: poster_co
