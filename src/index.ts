@@ -19,7 +19,13 @@ async function main() {
   });
 
   await app.register(cors, {
-    origin: config.corsOrigins,
+    origin: (origin, cb) => {
+      if (config.isAllowedCorsOrigin(origin)) {
+        cb(null, true);
+        return;
+      }
+      cb(null, false);
+    },
     credentials: true,
   });
 
