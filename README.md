@@ -5,7 +5,7 @@ Backend API for [Poster.Co](https://poster.co) — product catalog, admin upload
 ## Stack
 
 - **Fastify** + TypeScript
-- **Prisma** + PostgreSQL
+- **Prisma** + MongoDB Atlas
 - **Cloudflare R2** (or local `uploads/` in dev)
 - **sharp** for WebP variants (thumb / card / full)
 
@@ -16,7 +16,7 @@ cp .env.example .env
 # Edit DATABASE_URL, JWT_SECRET, ADMIN_EMAIL, ADMIN_PASSWORD
 
 npm install
-npx prisma migrate dev
+npx prisma db push
 npm run db:seed
 npm run dev
 ```
@@ -29,7 +29,7 @@ See [.env.example](.env.example).
 
 | Variable | Purpose |
 |----------|---------|
-| `DATABASE_URL` | PostgreSQL connection string |
+| `DATABASE_URL` | MongoDB Atlas connection string (`mongodb+srv://...`) |
 | `JWT_SECRET` | Admin JWT signing key |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Bootstrap admin (first boot only) |
 | `CORS_ORIGIN` | Comma-separated frontend origins |
@@ -55,15 +55,9 @@ See [.env.example](.env.example).
 - `POST /api/products/:id/images`
 - `DELETE /api/products/:id/images/:imageId`
 
-## Render deploy (recommended)
+## Render deploy (free — MongoDB Atlas)
 
-See **[RENDER.md](RENDER.md)** for full steps.
-
-1. Push repo to GitHub
-2. Render → **New → Blueprint** → connect repo (uses [`render.yaml`](render.yaml))
-3. Set `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `CORS_ORIGIN`, and `R2_*` env vars
-4. After deploy: **Shell** → `npm run db:seed`
-5. API URL: `https://your-service.onrender.com`
+See **[RENDER.md](RENDER.md)** — Atlas M0 (free) + Render free web + R2.
 
 ## Railway deploy (alternative)
 

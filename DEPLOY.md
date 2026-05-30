@@ -1,6 +1,6 @@
 # Deploy poster.co.BE + poster.co
 
-> **Preferred host: [Render](RENDER.md)** — step-by-step guide and `render.yaml` blueprint included.
+> **Preferred host: [Render free tier](RENDER.md)** — no credit card. Use **Neon** for Postgres (free, no expiry).
 
 ## 1. Render — backend (poster.co.BE)
 

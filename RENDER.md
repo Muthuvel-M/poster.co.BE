@@ -1,64 +1,87 @@
-# Deploy poster.co.BE on Render
+# Deploy poster.co.BE — 100% free (MongoDB Atlas + Render)
 
-## Option A — Blueprint (recommended)
-
-1. Push this repo to GitHub
-2. [Render Dashboard](https://dashboard.render.com) → **New** → **Blueprint**
-3. Connect `poster.co.BE` repo — Render reads [`render.yaml`](render.yaml)
-4. On first deploy, set these manually when prompted:
-   - `ADMIN_EMAIL` — your admin login email
-   - `ADMIN_PASSWORD` — strong password
-   - `CORS_ORIGIN` — e.g. `https://your-app.vercel.app,http://localhost:5173`
-   - `R2_*` — Cloudflare R2 credentials (required for image uploads in production)
-5. Wait for deploy to finish
-
-## Option B — Manual setup
-
-1. **New → PostgreSQL** → name it `poster-co-db` → create
-2. **New → Web Service** → connect GitHub repo
-3. Settings:
-   - **Language:** Docker
-   - **Dockerfile path:** `./Dockerfile`
-   - **Health check path:** `/health`
-4. **Environment** → add variables:
-
-| Variable | Source |
-|----------|--------|
-| `DATABASE_URL` | Copy **Internal Database URL** from Postgres service |
-| `JWT_SECRET` | Generate a long random string |
-| `ADMIN_EMAIL` | Your admin email |
-| `ADMIN_PASSWORD` | Your admin password |
-| `CORS_ORIGIN` | Your Vercel frontend URL(s), comma-separated |
-| `NODE_ENV` | `production` |
-| `R2_ACCOUNT_ID` | Cloudflare |
-| `R2_ACCESS_KEY_ID` | Cloudflare |
-| `R2_SECRET_ACCESS_KEY` | Cloudflare |
-| `R2_BUCKET_NAME` | `poster-co` |
-| `R2_PUBLIC_URL` | Public R2/CDN URL |
-
-Render sets `PORT` automatically — no need to configure it.
-
-5. **Create Web Service**
+| Service | Platform | Cost |
+|---------|----------|------|
+| API | Render **Free** | $0 |
+| Database | **MongoDB Atlas M0** | $0 (512 MB, no expiry) |
+| Images | **Cloudflare R2** | $0 |
+| Frontend | **Vercel** | $0 |
 
 ---
 
-## After first deploy
+## Step 1 — MongoDB Atlas (free database)
 
-### Seed categories (one-time)
+1. Go to [cloud.mongodb.com](https://cloud.mongodb.com) → sign up (free, no card for M0)
+2. **Build a Database** → choose **M0 FREE** → pick a region close to you
+3. **Create** database user (username + password) — save the password
+4. **Network Access** → **Add IP Address**:
+   - For Render: **Allow Access from Anywhere** (`0.0.0.0/0`)
+   - Or add your home IP for local dev only
+5. **Database** → **Connect** → **Drivers** → copy connection string:
 
-Render Shell → your web service → **Shell**:
+   ```
+   mongodb+srv://myuser:<password>@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority
+   ```
+
+6. Edit the URL:
+   - Replace `<password>` with your real password
+   - Add database name before `?`: `...mongodb.net/poster_co?retryWrites=...`
+
+   Final example:
+
+   ```
+   mongodb+srv://myuser:MyPass123@cluster0.abc123.mongodb.net/poster_co?retryWrites=true&w=majority
+   ```
+
+### Push schema + seed (from your Mac)
+
+```bash
+cd poster.co.BE
+
+# Put Atlas URL in .env as DATABASE_URL, then:
+npx prisma db push
+npm run db:seed
+```
+
+You should see `Seeded 8 categories`.
+
+---
+
+## Step 2 — Cloudflare R2 (free images)
+
+1. [Cloudflare Dashboard](https://dash.cloudflare.com) → **R2** → create bucket `poster-co`
+2. Enable **public access** / R2.dev URL
+3. Create **R2 API token** (Read & Write)
+4. Save: Account ID, Access Key, Secret Key, public URL
+
+---
+
+## Step 3 — Render (free API)
+
+1. Push repo to GitHub
+2. [Render](https://dashboard.render.com) → **New → Blueprint** → connect `poster.co.BE`
+3. Set env vars:
+
+| Variable | Value |
+|----------|---------|
+| `DATABASE_URL` | MongoDB Atlas URI from Step 1 |
+| `ADMIN_EMAIL` | your admin email |
+| `ADMIN_PASSWORD` | your admin password |
+| `CORS_ORIGIN` | `https://your-app.vercel.app,http://localhost:5173` |
+| `R2_ACCOUNT_ID` | Cloudflare |
+| `R2_ACCESS_KEY_ID` | Cloudflare |
+| `R2_SECRET_ACCESS_KEY` | Cloudflare |
+| `R2_PUBLIC_URL` | public R2 URL |
+
+4. Deploy → wait for build
+
+Schema sync runs automatically: `npx prisma db push` on start.
+
+If categories are empty after deploy, run seed once in Render Shell:
 
 ```bash
 npm run db:seed
 ```
-
-Or locally with the **External** Postgres URL from Render:
-
-```bash
-DATABASE_URL="postgresql://..." npm run db:seed
-```
-
-Migrations run automatically on each deploy via the Dockerfile `CMD`.
 
 ### Verify
 
@@ -69,39 +92,29 @@ curl https://YOUR-SERVICE.onrender.com/api/categories
 
 ---
 
-## Connect frontend (Vercel)
+## Step 4 — Frontend (Vercel)
 
 ```
 VITE_API_URL=https://YOUR-SERVICE.onrender.com
 ```
 
-Redeploy `poster.co`, then open `/admin` → **Connect API**.
+Redeploy → `/admin` → **Connect API** → add products.
 
 ---
 
-## Cloudflare R2 (production images)
+## Free tier notes
 
-Render disk is ephemeral — **use R2 for uploads**, not local `uploads/`.
-
-1. Cloudflare → R2 → create bucket `poster-co`
-2. Enable public access or custom domain (`cdn.poster.co`)
-3. Create API token (Object Read & Write)
-4. Set `R2_PUBLIC_URL` to the public bucket URL
+- **Render free API** sleeps after 15 min idle (~30–60s cold start)
+- **Atlas M0** — 512 MB, shared CPU, free forever for small shops
+- **R2** — 10 GB/month free storage
 
 ---
 
-## Render tips
+## Common errors
 
-| Topic | Note |
-|-------|------|
-| **Free web tier** | Spins down after ~15 min idle; first request may be slow |
-| **Free Postgres** | Expires after 90 days — use **Basic** for production |
-| **Region** | Default in `render.yaml` is `singapore` — change in blueprint if needed |
-| **SSL** | Render provides HTTPS automatically |
-| **Logs** | Dashboard → your service → **Logs** |
-
----
-
-## Railway (alternative)
-
-See [DEPLOY.md](DEPLOY.md) if you want Railway instead.
+| Error | Fix |
+|-------|-----|
+| URL must start with `mongodb` | Use Atlas connection string, not dashboard URL |
+| Authentication failed | Check password in URI (URL-encode special chars like `@`, `#`) |
+| IP not whitelisted | Atlas → Network Access → allow `0.0.0.0/0` for Render |
+| Empty categories | Run `npm run db:seed` |

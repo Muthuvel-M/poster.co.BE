@@ -1,4 +1,4 @@
-import type { Product, ProductImage, ProductSize, Category, Size } from "@prisma/client";
+import type { Category, Product, ProductImage, ProductSize, Size } from "@prisma/client";
 
 export type ApiProductSize = {
   size: Size;
@@ -37,10 +37,8 @@ export type ApiCategory = {
   label: string;
 };
 
-type ProductWithRelations = Product & {
+type ProductWithCategory = Product & {
   category: Category;
-  sizes: ProductSize[];
-  images: ProductImage[];
 };
 
 const NEUTRAL_PALETTE = { bg: "#eae6d7", fg: "#1a1410", accent: "#6b7280" };
@@ -52,8 +50,9 @@ export function displayPrice(sizes: ProductSize[]): number {
   return first.discountedPrice ?? first.price;
 }
 
-export function toApiProduct(product: ProductWithRelations): ApiProduct {
-  const primary = product.images.sort((a, b) => a.sortOrder - b.sortOrder)[0];
+export function toApiProduct(product: ProductWithCategory): ApiProduct {
+  const images = [...product.images].sort((a, b) => a.sortOrder - b.sortOrder);
+  const primary = images[0];
 
   return {
     id: product.slug,
@@ -72,17 +71,15 @@ export function toApiProduct(product: ProductWithRelations): ApiProduct {
     sizes: product.sizes.map((s) => ({
       size: s.size,
       price: s.price,
-      discountedPrice: s.discountedPrice,
+      discountedPrice: s.discountedPrice ?? null,
     })),
-    images: product.images
-      .sort((a, b) => a.sortOrder - b.sortOrder)
-      .map((img) => ({
-        id: img.id,
-        url: img.url,
-        thumbUrl: img.thumbUrl,
-        cardUrl: img.cardUrl,
-        sortOrder: img.sortOrder,
-      })),
+    images: images.map((img) => ({
+      id: img.id,
+      url: img.url,
+      thumbUrl: img.thumbUrl,
+      cardUrl: img.cardUrl,
+      sortOrder: img.sortOrder,
+    })),
   };
 }
 

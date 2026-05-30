@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Multipart, MultipartFile } from "@fastify/multipart";
-import { Size, ProductStatus } from "@prisma/client";
+import { ProductStatus, Size } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
@@ -8,11 +8,7 @@ import { slugify, uniqueSlug } from "../lib/slug.js";
 import { processAndUploadImage } from "../lib/storage.js";
 import { toApiCategories, toApiProduct } from "../lib/serializers.js";
 
-const productInclude = {
-  category: true,
-  sizes: true,
-  images: true,
-} as const;
+const productInclude = { category: true } as const;
 
 const sizeSchema = z.object({
   size: z.enum(["A4", "A5", "A6"]),
@@ -33,6 +29,14 @@ const productFieldsSchema = z.object({
 });
 
 type ParsedFields = z.infer<typeof productFieldsSchema>;
+
+function mapSizes(sizes: ParsedFields["sizes"]) {
+  return sizes.map((s) => ({
+    size: s.size as Size,
+    price: s.price,
+    discountedPrice: s.discountedPrice ?? null,
+  }));
+}
 
 async function readParts(request: { parts: () => AsyncIterable<Multipart> }) {
   const fields: Record<string, string> = {};
@@ -97,14 +101,15 @@ function parseProductFields(fields: Record<string, string>): ParsedFields {
 
 async function resolveCategory(categoryInput: string) {
   const slug = slugify(categoryInput);
+  const trimmed = categoryInput.trim();
   const existing = await prisma.category.findFirst({
-    where: { OR: [{ slug }, { name: { equals: categoryInput, mode: "insensitive" } }] },
+    where: { OR: [{ slug }, { name: trimmed }] },
   });
   if (existing) return existing;
 
   return prisma.category.create({
     data: {
-      name: categoryInput.trim(),
+      name: trimmed,
       slug: slug || "general",
     },
   });
@@ -118,22 +123,29 @@ async function findProductByIdOrSlug(id: string) {
 }
 
 async function uploadImages(productId: string, files: MultipartFile[]) {
-  const existingCount = await prisma.productImage.count({ where: { productId } });
+  const existing = await prisma.product.findUnique({
+    where: { id: productId },
+    select: { images: true },
+  });
+  const startOrder = existing?.images.length ?? 0;
+  const newImages = [];
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i]!;
     const buffer = await file.toBuffer();
     const imageId = randomUUID();
     const urls = await processAndUploadImage(productId, imageId, buffer);
-
-    await prisma.productImage.create({
-      data: {
-        productId,
-        ...urls,
-        sortOrder: existingCount + i,
-      },
+    newImages.push({
+      id: imageId,
+      ...urls,
+      sortOrder: startOrder + i,
     });
   }
+
+  await prisma.product.update({
+    where: { id: productId },
+    data: { images: { push: newImages } },
+  });
 }
 
 export async function productRoutes(app: FastifyInstance): Promise<void> {
@@ -199,13 +211,8 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
           categoryId: category.id,
           stock: data.stock,
           status: ProductStatus.ACTIVE,
-          sizes: {
-            create: data.sizes.map((s) => ({
-              size: s.size as Size,
-              price: s.price,
-              discountedPrice: s.discountedPrice ?? null,
-            })),
-          },
+          sizes: mapSizes(data.sizes),
+          images: [],
         },
         include: productInclude,
       });
@@ -235,8 +242,6 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
       const data = parseProductFields(fields);
       const category = await resolveCategory(data.category);
 
-      await prisma.productSize.deleteMany({ where: { productId: existing.id } });
-
       await prisma.product.update({
         where: { id: existing.id },
         data: {
@@ -248,13 +253,7 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
           categoryId: category.id,
           stock: data.stock,
           status: data.status ?? existing.status,
-          sizes: {
-            create: data.sizes.map((s) => ({
-              size: s.size as Size,
-              price: s.price,
-              discountedPrice: s.discountedPrice ?? null,
-            })),
-          },
+          sizes: mapSizes(data.sizes),
         },
       });
 
@@ -320,12 +319,16 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
       const existing = await findProductByIdOrSlug(id);
       if (!existing) return reply.code(404).send({ error: "Product not found" });
 
-      const image = await prisma.productImage.findFirst({
-        where: { id: imageId, productId: existing.id },
-      });
+      const image = existing.images.find((img) => img.id === imageId);
       if (!image) return reply.code(404).send({ error: "Image not found" });
 
-      await prisma.productImage.delete({ where: { id: imageId } });
+      await prisma.product.update({
+        where: { id: existing.id },
+        data: {
+          images: existing.images.filter((img) => img.id !== imageId),
+        },
+      });
+
       return { ok: true };
     },
   );
