@@ -3,6 +3,7 @@ import { ProductStatus, Size } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { prisma } from "../lib/prisma.js";
 import { CATALOG_CATEGORIES } from "../lib/catalog.js";
+import { SIZE_PRICE } from "../lib/pricing.js";
 import { slugify, uniqueSlug } from "../lib/slug.js";
 import { processAndUploadImage } from "../lib/storage.js";
 import { toApiProduct } from "../lib/serializers.js";
@@ -45,11 +46,11 @@ async function resolveCategory(categoryInput: string) {
   });
 }
 
-function sizesFromPrice(price: number) {
+function sizesFromPrice(_price?: number) {
   return [
-    { size: Size.A6, price: Math.round(price * 0.6) },
-    { size: Size.A5, price },
-    { size: Size.A4, price: Math.round(price * 1.5) },
+    { size: Size.A6, price: SIZE_PRICE.A6 },
+    { size: Size.A5, price: SIZE_PRICE.A5 },
+    { size: Size.A4, price: SIZE_PRICE.A4 },
   ];
 }
 
@@ -66,8 +67,7 @@ function sizesFromFields(fields: Record<string, string>) {
     ];
   }
 
-  const fallback = a5 > 0 ? a5 : 199;
-  return sizesFromPrice(fallback);
+  return sizesFromPrice();
 }
 
 function basenameNoExt(filename: string): string {
@@ -152,11 +152,10 @@ function rowToBulk(row: Record<string, string>): BulkRow | null {
   }
 
   if (sizes.length === 0) {
-    const defaultPrice = Number(row.price || row.a5 || "199");
     sizes.push(
-      { size: Size.A6, price: Math.round(defaultPrice * 0.6) },
-      { size: Size.A5, price: defaultPrice },
-      { size: Size.A4, price: Math.round(defaultPrice * 1.5) },
+      { size: Size.A6, price: SIZE_PRICE.A6 },
+      { size: Size.A5, price: SIZE_PRICE.A5 },
+      { size: Size.A4, price: SIZE_PRICE.A4 },
     );
   }
 

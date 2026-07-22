@@ -7,7 +7,7 @@ const DEFAULT_FAQS = [
   {
     question: "What sizes are available for posters?",
     answer:
-      "We offer A6 (10×15 cm), A5 (15×21 cm), and A4 (21×30 cm) sizes. Bulk pricing applies when you order multiple posters of the same size.",
+      "We offer A6 (₹20), A5 (₹25), and A4 (₹40). Combos: any 2 A4 for ₹70, any 3 A4 for ₹109, mini (A5+A6) for ₹39, mixed (A4+A5+A6) for ₹69. 1 A6 free on orders above ₹199.",
     sortOrder: 1,
   },
   {
@@ -19,7 +19,7 @@ const DEFAULT_FAQS = [
   {
     question: "Is free shipping available?",
     answer:
-      "Yes — free shipping is available for all orders above ₹500. For orders below ₹500, a flat shipping charge of ₹80 applies.",
+      "Yes — free shipping on all orders of ₹499 or more. Below ₹499, a flat shipping charge of ₹80 applies.",
     sortOrder: 3,
   },
   {

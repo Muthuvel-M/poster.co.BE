@@ -2,6 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { OrderStatus, Size } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
+import { priceOrderLines, SIZE_PRICE } from "../lib/pricing.js";
+import type { PosterSize } from "../lib/pricing.js";
 
 const orderLineSchema = z.object({
   productId: z.string().min(1),
@@ -109,6 +111,13 @@ export async function orderRoutes(app: FastifyInstance): Promise<void> {
       const customerId =
         request.user?.role === "customer" ? request.user.sub : undefined;
 
+      const priced = priceOrderLines(
+        body.lines.map((l) => ({
+          size: l.size as PosterSize,
+          qty: l.qty,
+        })),
+      );
+
       const order = await prisma.order.create({
         data: {
           orderId: generateOrderId(),
@@ -128,13 +137,13 @@ export async function orderRoutes(app: FastifyInstance): Promise<void> {
             title: l.title,
             size: l.size as Size,
             qty: l.qty,
-            unitPrice: l.unitPrice,
-            lineTotal: l.lineTotal,
+            unitPrice: SIZE_PRICE[l.size as PosterSize],
+            lineTotal: SIZE_PRICE[l.size as PosterSize] * l.qty,
             imageUrl: l.imageUrl,
           })),
-          subtotal: body.subtotal,
-          shipping: body.shipping,
-          total: body.total,
+          subtotal: priced.subtotal,
+          shipping: priced.shipping,
+          total: priced.total,
           status: OrderStatus.PENDING,
           whatsappOpenedAt: new Date(),
         },

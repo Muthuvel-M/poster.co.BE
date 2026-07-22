@@ -63,7 +63,7 @@ CLOUDINARY_API_SECRET=...
 | `CLOUDINARY_API_KEY` | Cloudinary |
 | `CLOUDINARY_API_SECRET` | Cloudinary |
 
-4. Deploy → `curl https://YOUR-SERVICE.onrender.com/health`  
+4. Deploy → `curl https://poster-co-be.onrender.com/health`  
    Should return `"storage":"cloudinary"`.
 
 Seed FAQs/categories once if empty: Render Shell → `npm run db:seed`
@@ -75,7 +75,7 @@ Seed FAQs/categories once if empty: Render Shell → `npm run db:seed`
 Repo: `poster.co`
 
 ```
-VITE_API_URL=https://YOUR-SERVICE.onrender.com
+VITE_API_URL=https://poster-co-be.onrender.com
 ```
 
 ---
@@ -85,7 +85,7 @@ VITE_API_URL=https://YOUR-SERVICE.onrender.com
 Repo: `Poster.co.AD`
 
 ```
-VITE_API_URL=https://YOUR-SERVICE.onrender.com
+VITE_API_URL=https://poster-co-be.onrender.com
 ```
 
 Login with `ADMIN_EMAIL` / `ADMIN_PASSWORD`.

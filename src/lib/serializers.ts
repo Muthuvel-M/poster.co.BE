@@ -1,5 +1,6 @@
 import type { Category, Product, ProductSize, Size } from "@prisma/client";
 import { CATALOG_CATEGORIES } from "./catalog.js";
+import { SIZE_PRICE } from "./pricing.js";
 
 export type ApiProductSize = {
   size: Size;
@@ -50,9 +51,10 @@ const NEUTRAL_PALETTE = { bg: "#eae6d7", fg: "#1a1410", accent: "#6b7280" };
 
 export function displayPrice(sizes: ProductSize[]): number {
   const a5 = sizes.find((s) => s.size === "A5");
-  const first = a5 ?? sizes[0];
-  if (!first) return 0;
-  return first.discountedPrice ?? first.price;
+  if (a5) return a5.discountedPrice ?? a5.price ?? SIZE_PRICE.A5;
+  const first = sizes[0];
+  if (!first) return SIZE_PRICE.A5;
+  return first.discountedPrice ?? first.price ?? SIZE_PRICE[first.size];
 }
 
 export function toApiProduct(product: ProductWithCategory): ApiProduct {
