@@ -9,6 +9,8 @@ function required(name: string, fallback?: string): string {
 const DEFAULT_CORS_ORIGINS = [
   "http://localhost:3000",
   "http://localhost:3001",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:3001",
   "https://poster-co.vercel.app",
 ];
 
@@ -24,6 +26,17 @@ function isAllowedCorsOrigin(origin: string | undefined): boolean {
   if (!origin) return true;
   const allowed = parseCorsOrigins();
   if (allowed.includes(origin)) return true;
+
+  // Store (customer) + admin local / LAN access
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+  if (
+    /^https?:\/\/(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?$/.test(
+      origin,
+    )
+  ) {
+    return true;
+  }
+
   if (/^https:\/\/poster-co[a-z0-9-]*\.vercel\.app$/.test(origin)) return true;
   if (/^https:\/\/poster-co-ad[a-z0-9-]*\.vercel\.app$/.test(origin)) return true;
   return false;
