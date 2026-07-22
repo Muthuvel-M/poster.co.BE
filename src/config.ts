@@ -12,6 +12,8 @@ const DEFAULT_CORS_ORIGINS = [
   "http://127.0.0.1:3000",
   "http://127.0.0.1:3001",
   "https://poster-co.vercel.app",
+  "https://www.auraframe.store",
+  "https://auraframe.store",
 ];
 
 function parseCorsOrigins(): string[] {
@@ -37,6 +39,7 @@ function isAllowedCorsOrigin(origin: string | undefined): boolean {
     return true;
   }
 
+  if (/^https:\/\/(www\.)?auraframe\.store$/.test(origin)) return true;
   if (/^https:\/\/poster-co[a-z0-9-]*\.vercel\.app$/.test(origin)) return true;
   if (/^https:\/\/poster-co-ad[a-z0-9-]*\.vercel\.app$/.test(origin)) return true;
   return false;
