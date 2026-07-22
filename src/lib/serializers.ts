@@ -93,7 +93,9 @@ export function toApiProduct(product: ProductWithCategory): ApiProduct {
 }
 
 export function toApiCategories(categories: Category[]): ApiCategory[] {
-  const order = new Map(CATALOG_CATEGORIES.map((c, i) => [c.slug, i]));
+  const order = new Map<string, number>(
+    CATALOG_CATEGORIES.map((c, i) => [c.slug, i]),
+  );
   return categories
     .filter((c) => order.has(c.slug))
     .map((c) => ({ key: c.slug, label: c.name }))
