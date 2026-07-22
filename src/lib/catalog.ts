@@ -2,6 +2,7 @@
 export const CATALOG_CATEGORIES = [
   { name: "Superheroes", slug: "superheroes" },
   { name: "Anime", slug: "anime" },
+  { name: "Actors", slug: "actors" },
   { name: "Sports", slug: "sports" },
   { name: "Cars and Bikes", slug: "cars-and-bikes" },
   { name: "Motivational", slug: "motivational" },
