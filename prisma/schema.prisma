@@ -18,6 +18,19 @@ enum Size {
   A6
 }
 
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPED
+  CANCELLED
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  HIDDEN
+}
+
 type ProductSize {
   size            Size
   price           Int
@@ -32,11 +45,46 @@ type ProductImage {
   sortOrder Int
 }
 
+type OrderLine {
+  productId String
+  slug      String
+  title     String
+  size      Size
+  qty       Int
+  unitPrice Int
+  lineTotal Int
+  imageUrl  String?
+}
+
+type OrderCustomer {
+  name    String
+  email   String
+  phone   String
+  address String
+  city    String?
+  zip     String?
+  country String?
+}
+
 model Admin {
   id           String   @id @default(cuid()) @map("_id")
   email        String   @unique
   passwordHash String
   createdAt    DateTime @default(now())
+}
+
+model Customer {
+  id           String   @id @default(cuid()) @map("_id")
+  email        String   @unique
+  passwordHash String?
+  googleId     String?  @unique
+  name         String
+  phone        String   @default("")
+  avatarUrl    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  orders       Order[]
+  reviews      Review[]
 }
 
 model Category {
@@ -60,6 +108,48 @@ model Product {
   status      ProductStatus  @default(ACTIVE)
   sizes       ProductSize[]
   images      ProductImage[]
+  reviews     Review[]
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
+}
+
+model Order {
+  id               String        @id @default(cuid()) @map("_id")
+  orderId          String        @unique
+  customerId       String?
+  customer         Customer?     @relation(fields: [customerId], references: [id])
+  customerSnapshot OrderCustomer
+  lines            OrderLine[]
+  subtotal         Int
+  shipping         Int
+  total            Int
+  status           OrderStatus   @default(PENDING)
+  whatsappOpenedAt DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+}
+
+model Review {
+  id         String       @id @default(cuid()) @map("_id")
+  productId  String
+  product    Product      @relation(fields: [productId], references: [id])
+  customerId String
+  customer   Customer     @relation(fields: [customerId], references: [id])
+  rating     Int
+  comment    String
+  status     ReviewStatus @default(PENDING)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@unique([productId, customerId])
+}
+
+model Faq {
+  id        String   @id @default(cuid()) @map("_id")
+  question  String
+  answer    String
+  sortOrder Int      @default(0)
+  published Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

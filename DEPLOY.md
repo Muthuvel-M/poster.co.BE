@@ -53,7 +53,7 @@ npm run db:seed
 
 ### Local dev (without R2)
 
-Images are stored in `uploads/` and served at `http://localhost:3001/uploads/`.
+Images are stored in `uploads/` and served at `http://localhost:3005/uploads/`.
 
 ```bash
 cp .env.example .env

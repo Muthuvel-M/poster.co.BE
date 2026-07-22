@@ -1,4 +1,5 @@
-import type { Category, Product, ProductImage, ProductSize, Size } from "@prisma/client";
+import type { Category, Product, ProductSize, Size } from "@prisma/client";
+import { CATALOG_CATEGORIES } from "./catalog.js";
 
 export type ApiProductSize = {
   size: Size;
@@ -16,6 +17,7 @@ export type ApiProductImage = {
 
 export type ApiProduct = {
   id: string;
+  dbId: string;
   slug: string;
   title: string;
   subtitle: string;
@@ -28,6 +30,9 @@ export type ApiProduct = {
   stock: number;
   status: Product["status"];
   imageUrl?: string;
+  thumbUrl?: string;
+  cardUrl?: string;
+  fullUrl?: string;
   sizes: ApiProductSize[];
   images: ApiProductImage[];
 };
@@ -56,6 +61,7 @@ export function toApiProduct(product: ProductWithCategory): ApiProduct {
 
   return {
     id: product.slug,
+    dbId: product.id,
     slug: product.slug,
     title: product.title,
     subtitle: product.subtitle ?? product.category.name,
@@ -68,6 +74,9 @@ export function toApiProduct(product: ProductWithCategory): ApiProduct {
     stock: product.stock,
     status: product.status,
     imageUrl: primary?.cardUrl ?? primary?.url,
+    thumbUrl: primary?.thumbUrl,
+    cardUrl: primary?.cardUrl,
+    fullUrl: primary?.url,
     sizes: product.sizes.map((s) => ({
       size: s.size,
       price: s.price,
@@ -84,10 +93,11 @@ export function toApiProduct(product: ProductWithCategory): ApiProduct {
 }
 
 export function toApiCategories(categories: Category[]): ApiCategory[] {
+  const order = new Map(CATALOG_CATEGORIES.map((c, i) => [c.slug, i]));
   return categories
-    .filter((c) => c.slug !== "general")
+    .filter((c) => order.has(c.slug))
     .map((c) => ({ key: c.slug, label: c.name }))
-    .sort((a, b) => a.label.localeCompare(b.label));
+    .sort((a, b) => (order.get(a.key) ?? 99) - (order.get(b.key) ?? 99));
 }
 
 export { NEUTRAL_PALETTE };

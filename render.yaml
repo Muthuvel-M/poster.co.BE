@@ -2,6 +2,7 @@
 # Docs: https://render.com/docs/free
 #
 # Database: MongoDB Atlas (free M0) — see RENDER.md
+# Images: Cloudinary (free tier)
 
 services:
   - type: web
@@ -25,13 +26,9 @@ services:
         sync: false
       - key: CORS_ORIGIN
         sync: false
-      - key: R2_ACCOUNT_ID
+      - key: CLOUDINARY_CLOUD_NAME
         sync: false
-      - key: R2_ACCESS_KEY_ID
+      - key: CLOUDINARY_API_KEY
         sync: false
-      - key: R2_SECRET_ACCESS_KEY
-        sync: false
-      - key: R2_BUCKET_NAME
-        value: poster-co
-      - key: R2_PUBLIC_URL
+      - key: CLOUDINARY_API_SECRET
         sync: false

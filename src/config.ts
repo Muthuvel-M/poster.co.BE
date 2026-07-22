@@ -7,8 +7,8 @@ function required(name: string, fallback?: string): string {
 }
 
 const DEFAULT_CORS_ORIGINS = [
-  "http://localhost:8080",
   "http://localhost:3000",
+  "http://localhost:3001",
   "https://poster-co.vercel.app",
 ];
 
@@ -24,13 +24,13 @@ function isAllowedCorsOrigin(origin: string | undefined): boolean {
   if (!origin) return true;
   const allowed = parseCorsOrigins();
   if (allowed.includes(origin)) return true;
-  // Vercel preview deploys: poster-co-git-main-user.vercel.app
   if (/^https:\/\/poster-co[a-z0-9-]*\.vercel\.app$/.test(origin)) return true;
+  if (/^https:\/\/poster-co-ad[a-z0-9-]*\.vercel\.app$/.test(origin)) return true;
   return false;
 }
 
 export const config = {
-  port: Number(process.env.PORT ?? 3001),
+  port: Number(process.env.PORT ?? 3005),
   nodeEnv: process.env.NODE_ENV ?? "development",
   databaseUrl: required("DATABASE_URL"),
   jwtSecret: required("JWT_SECRET", "dev-secret-change-in-production"),
@@ -39,23 +39,22 @@ export const config = {
   corsOrigins: parseCorsOrigins(),
   isAllowedCorsOrigin,
   uploadDir: process.env.UPLOAD_DIR ?? "uploads",
-  r2: {
-    accountId: process.env.R2_ACCOUNT_ID ?? "",
-    accessKeyId: process.env.R2_ACCESS_KEY_ID ?? "",
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? "",
-    bucketName: process.env.R2_BUCKET_NAME ?? "poster-co",
-    publicUrl: (process.env.R2_PUBLIC_URL ?? "http://localhost:3001/uploads").replace(
-      /\/$/,
-      "",
-    ),
+  googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
+  cloudinary: {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME ?? "",
+    apiKey: process.env.CLOUDINARY_API_KEY ?? "",
+    apiSecret: process.env.CLOUDINARY_API_SECRET ?? "",
   },
 };
 
-export function isR2Configured(): boolean {
+export function isCloudinaryConfigured(): boolean {
   return Boolean(
-    config.r2.accountId &&
-      config.r2.accessKeyId &&
-      config.r2.secretAccessKey &&
-      config.r2.bucketName,
+    config.cloudinary.cloudName &&
+      config.cloudinary.apiKey &&
+      config.cloudinary.apiSecret,
   );
+}
+
+export function isGoogleAuthConfigured(): boolean {
+  return Boolean(config.googleClientId);
 }

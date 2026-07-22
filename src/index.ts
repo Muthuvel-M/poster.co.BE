@@ -4,18 +4,22 @@ import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { config, isR2Configured } from "./config.js";
+import { config, isCloudinaryConfigured } from "./config.js";
 import { prisma } from "./lib/prisma.js";
 import { ensureAdminUser, registerAuth } from "./plugins/auth.js";
 import { categoryRoutes } from "./routes/categories.js";
 import { productRoutes } from "./routes/products.js";
+import { orderRoutes } from "./routes/orders.js";
+import { reviewRoutes } from "./routes/reviews.js";
+import { faqRoutes } from "./routes/faqs.js";
+import { adminRoutes } from "./routes/admin.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function main() {
   const app = Fastify({
     logger: config.nodeEnv !== "production",
-    bodyLimit: 20 * 1024 * 1024,
+    bodyLimit: 50 * 1024 * 1024,
   });
 
   await app.register(cors, {
@@ -27,39 +31,65 @@ async function main() {
       cb(null, false);
     },
     credentials: true,
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Authorization", "Content-Type", "Accept"],
   });
 
   await app.register(multipart, {
-    limits: { fileSize: 15 * 1024 * 1024, files: 10 },
+    limits: { fileSize: 15 * 1024 * 1024, files: 50 },
   });
 
-  if (!isR2Configured()) {
-    const uploadRoot = path.resolve(config.uploadDir);
-    await app.register(fastifyStatic, {
-      root: uploadRoot,
-      prefix: "/uploads/",
-      decorateReply: false,
-    });
+  // Always serve local uploads (older products may still point here even
+  // after Cloudinary is enabled for new uploads).
+  const uploadRoot = path.resolve(config.uploadDir);
+  await app.register(fastifyStatic, {
+    root: uploadRoot,
+    prefix: "/uploads/",
+    decorateReply: false,
+    setHeaders: (res) => {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    },
+  });
+
+  if (isCloudinaryConfigured()) {
+    console.log(
+      `Cloudinary configured (cloud: ${config.cloudinary.cloudName}); also serving local uploads from ${uploadRoot}`,
+    );
+  } else {
     console.log(`Serving local uploads from ${uploadRoot}`);
   }
 
   await registerAuth(app);
   await categoryRoutes(app);
   await productRoutes(app);
+  await orderRoutes(app);
+  await reviewRoutes(app);
+  await faqRoutes(app);
+  await adminRoutes(app);
 
   app.get("/", async () => ({
     name: "poster.co.BE",
     status: "ok",
+    storage: isCloudinaryConfigured() ? "cloudinary" : "local",
     docs: {
       health: "GET /health",
       categories: "GET /api/categories",
       products: "GET /api/products",
       product: "GET /api/products/:slug",
+      faqs: "GET /api/faqs",
+      customerRegister: "POST /api/auth/register",
+      customerLogin: "POST /api/auth/login",
       adminLogin: "POST /api/admin/login",
+      createOrder: "POST /api/orders",
     },
   }));
 
-  app.get("/health", async () => ({ ok: true }));
+  app.get("/health", async () => ({
+    ok: true,
+    storage: isCloudinaryConfigured() ? "cloudinary" : "local",
+  }));
 
   await ensureAdminUser();
 

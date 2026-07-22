@@ -1,8 +1,8 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { v2 as cloudinary } from "cloudinary";
 import sharp from "sharp";
-import { config, isR2Configured } from "../config.js";
+import { config, isCloudinaryConfigured } from "../config.js";
 
 export type ImageVariant = "thumb" | "card" | "full";
 
@@ -12,44 +12,60 @@ const VARIANT_WIDTH: Record<ImageVariant, number> = {
   full: 1600,
 };
 
-let s3: S3Client | null = null;
+let cloudinaryReady = false;
 
-function getS3(): S3Client {
-  if (!s3) {
-    s3 = new S3Client({
-      region: "auto",
-      endpoint: `https://${config.r2.accountId}.r2.cloudflarestorage.com`,
-      credentials: {
-        accessKeyId: config.r2.accessKeyId,
-        secretAccessKey: config.r2.secretAccessKey,
-      },
-    });
-  }
-  return s3;
+function ensureCloudinary() {
+  if (cloudinaryReady) return;
+  cloudinary.config({
+    cloud_name: config.cloudinary.cloudName,
+    api_key: config.cloudinary.apiKey,
+    api_secret: config.cloudinary.apiSecret,
+    secure: true,
+  });
+  cloudinaryReady = true;
 }
 
-function publicUrl(key: string): string {
-  return `${config.r2.publicUrl}/${key}`;
+function uploadBufferToCloudinary(
+  buffer: Buffer,
+  publicId: string,
+): Promise<string> {
+  ensureCloudinary();
+  return new Promise((resolve, reject) => {
+    cloudinary.uploader
+      .upload_stream(
+        {
+          public_id: publicId,
+          resource_type: "image",
+          format: "webp",
+          overwrite: true,
+          unique_filename: false,
+        },
+        (err, result) => {
+          if (err || !result?.secure_url) {
+            reject(err ?? new Error("Cloudinary upload returned no URL"));
+            return;
+          }
+          resolve(result.secure_url);
+        },
+      )
+      .end(buffer);
+  });
 }
 
-async function uploadBuffer(key: string, buffer: Buffer): Promise<string> {
-  if (isR2Configured()) {
-    await getS3().send(
-      new PutObjectCommand({
-        Bucket: config.r2.bucketName,
-        Key: key,
-        Body: buffer,
-        ContentType: "image/webp",
-        CacheControl: "public, max-age=31536000, immutable",
-      }),
-    );
-    return publicUrl(key);
-  }
-
+async function uploadBufferLocal(key: string, buffer: Buffer): Promise<string> {
   const filePath = path.join(config.uploadDir, key);
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, buffer);
-  return publicUrl(key);
+  return `http://localhost:${config.port}/uploads/${key}`;
+}
+
+async function uploadBuffer(key: string, buffer: Buffer): Promise<string> {
+  if (isCloudinaryConfigured()) {
+    // Cloudinary public_id without extension
+    const publicId = key.replace(/\.webp$/i, "");
+    return uploadBufferToCloudinary(buffer, publicId);
+  }
+  return uploadBufferLocal(key, buffer);
 }
 
 export async function processAndUploadImage(
