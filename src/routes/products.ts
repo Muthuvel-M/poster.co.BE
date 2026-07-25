@@ -371,10 +371,7 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
       const existing = await findProductByIdOrSlug(id);
       if (!existing) return reply.code(404).send({ error: "Product not found" });
 
-      await prisma.product.update({
-        where: { id: existing.id },
-        data: { status: ProductStatus.ARCHIVED },
-      });
+      await prisma.product.delete({ where: { id: existing.id } });
 
       return { ok: true };
     },
