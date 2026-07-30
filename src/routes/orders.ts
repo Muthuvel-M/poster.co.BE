@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { priceOrderLines, SIZE_PRICE } from "../lib/pricing.js";
 import type { PosterSize } from "../lib/pricing.js";
+import { getSizePriceMap } from "../lib/pricing-settings.js";
 
 const orderLineSchema = z.object({
   productId: z.string().min(1),
@@ -110,12 +111,14 @@ export async function orderRoutes(app: FastifyInstance): Promise<void> {
       const body = createOrderSchema.parse(request.body);
       const customerId =
         request.user?.role === "customer" ? request.user.sub : undefined;
+      const sizePrice = await getSizePriceMap();
 
       const priced = priceOrderLines(
         body.lines.map((l) => ({
           size: l.size as PosterSize,
           qty: l.qty,
         })),
+        sizePrice,
       );
 
       const order = await prisma.order.create({
@@ -137,8 +140,10 @@ export async function orderRoutes(app: FastifyInstance): Promise<void> {
             title: l.title,
             size: l.size as Size,
             qty: l.qty,
-            unitPrice: SIZE_PRICE[l.size as PosterSize],
-            lineTotal: SIZE_PRICE[l.size as PosterSize] * l.qty,
+            unitPrice: sizePrice[l.size as PosterSize] ?? SIZE_PRICE[l.size as PosterSize],
+            lineTotal:
+              (sizePrice[l.size as PosterSize] ?? SIZE_PRICE[l.size as PosterSize]) *
+              l.qty,
             imageUrl: l.imageUrl,
           })),
           subtotal: priced.subtotal,

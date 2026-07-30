@@ -3,7 +3,8 @@ import { ProductStatus, Size } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { prisma } from "../lib/prisma.js";
 import { CATALOG_CATEGORIES } from "../lib/catalog.js";
-import { SIZE_PRICE } from "../lib/pricing.js";
+import { getSizePriceMap, saveSizePriceMap } from "../lib/pricing-settings.js";
+import type { SizePriceMap } from "../lib/pricing.js";
 import { slugify, uniqueSlug } from "../lib/slug.js";
 import { processAndUploadImage } from "../lib/storage.js";
 import { toApiProduct } from "../lib/serializers.js";
@@ -46,15 +47,15 @@ async function resolveCategory(categoryInput: string) {
   });
 }
 
-function sizesFromPrice(_price?: number) {
+function sizesFromPrice(sizePrice: SizePriceMap) {
   return [
-    { size: Size.A6, price: SIZE_PRICE.A6 },
-    { size: Size.A5, price: SIZE_PRICE.A5 },
-    { size: Size.A4, price: SIZE_PRICE.A4 },
+    { size: Size.A6, price: sizePrice.A6 },
+    { size: Size.A5, price: sizePrice.A5 },
+    { size: Size.A4, price: sizePrice.A4 },
   ];
 }
 
-function sizesFromFields(fields: Record<string, string>) {
+function sizesFromFields(fields: Record<string, string>, fallback: SizePriceMap) {
   const a6 = Number(fields.price_a6 || fields.priceA6);
   const a5 = Number(fields.price_a5 || fields.priceA5 || fields.price);
   const a4 = Number(fields.price_a4 || fields.priceA4);
@@ -67,7 +68,7 @@ function sizesFromFields(fields: Record<string, string>) {
     ];
   }
 
-  return sizesFromPrice();
+  return sizesFromPrice(fallback);
 }
 
 function basenameNoExt(filename: string): string {
@@ -129,7 +130,19 @@ type BulkRow = {
   sizes: { size: Size; price: number; discountedPrice?: number | null }[];
 };
 
-function rowToBulk(row: Record<string, string>): BulkRow | null {
+function toApiPricing(sizePrice: SizePriceMap) {
+  return {
+    priceA4: sizePrice.A4,
+    priceA5: sizePrice.A5,
+    priceA6: sizePrice.A6,
+    sizePrice,
+  };
+}
+
+function rowToBulk(
+  row: Record<string, string>,
+  fallback: SizePriceMap,
+): BulkRow | null {
   const title = row.title || row.name;
   if (!title) return null;
 
@@ -153,9 +166,9 @@ function rowToBulk(row: Record<string, string>): BulkRow | null {
 
   if (sizes.length === 0) {
     sizes.push(
-      { size: Size.A6, price: SIZE_PRICE.A6 },
-      { size: Size.A5, price: SIZE_PRICE.A5 },
-      { size: Size.A4, price: SIZE_PRICE.A4 },
+      { size: Size.A6, price: fallback.A6 },
+      { size: Size.A5, price: fallback.A5 },
+      { size: Size.A4, price: fallback.A4 },
     );
   }
 
@@ -179,6 +192,48 @@ function rowToBulk(row: Record<string, string>): BulkRow | null {
 }
 
 export async function adminRoutes(app: FastifyInstance): Promise<void> {
+  app.get(
+    "/api/admin/pricing",
+    { preHandler: [app.authenticateAdmin] },
+    async () => {
+      const sizePrice = await getSizePriceMap();
+      return toApiPricing(sizePrice);
+    },
+  );
+
+  app.patch(
+    "/api/admin/pricing",
+    { preHandler: [app.authenticateAdmin] },
+    async (request, reply) => {
+      const body = request.body as
+        | {
+            priceA4?: unknown;
+            priceA5?: unknown;
+            priceA6?: unknown;
+          }
+        | undefined;
+
+      const priceA4 = Number(body?.priceA4);
+      const priceA5 = Number(body?.priceA5);
+      const priceA6 = Number(body?.priceA6);
+      const values = [priceA4, priceA5, priceA6];
+      if (
+        values.some((n) => Number.isNaN(n) || !Number.isInteger(n) || n < 1)
+      ) {
+        return reply.code(400).send({
+          error: "Body must be { priceA4, priceA5, priceA6 } with positive integers",
+        });
+      }
+
+      const saved = await saveSizePriceMap({
+        A4: priceA4,
+        A5: priceA5,
+        A6: priceA6,
+      });
+      return toApiPricing(saved);
+    },
+  );
+
   app.get(
     "/api/admin/stats",
     { preHandler: [app.authenticateAdmin] },
@@ -269,6 +324,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const { fields, files } = await readMultipart(request);
       const mode = fields.mode === "quick" ? "quick" : "csv";
+      const sizePrice = await getSizePriceMap();
 
       const imageFiles = files.filter(
         (f) =>
@@ -304,7 +360,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         const categoryName = fields.category || "Aesthetic";
         const category = await resolveCategory(categoryName);
         const stock = Number(fields.stock || "50") || 50;
-        const sizes = sizesFromFields(fields);
+        const sizes = sizesFromFields(fields, sizePrice);
         const existingCount = await prisma.product.count({
           where: { categoryId: category.id },
         });
@@ -374,7 +430,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
           ? csvFile.buffer.toString("utf8")
           : fields.csv;
         const rows = parseCsv(csvText)
-          .map(rowToBulk)
+          .map((row) => rowToBulk(row, sizePrice))
           .filter((r): r is BulkRow => r !== null);
 
         if (rows.length === 0) {

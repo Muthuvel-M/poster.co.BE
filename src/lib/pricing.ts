@@ -8,29 +8,35 @@ export const SIZE_PRICE: Record<PosterSize, number> = {
   A6: 20,
 };
 
+export type SizePriceMap = Record<PosterSize, number>;
+
 export const SHIPPING_THRESHOLD = 499;
 export const SHIPPING_CHARGE = 80;
 export const FREE_A6_THRESHOLD = 199;
 
 export type SizeCounts = Record<PosterSize, number>;
 
-function a4ComboCost(n: number): number {
+function a4ComboCost(n: number, prices: SizePriceMap): number {
   if (n <= 0) return 0;
   const dp = Array.from({ length: n + 1 }, () => Infinity);
   dp[0] = 0;
   for (let i = 1; i <= n; i++) {
-    dp[i] = Math.min(dp[i]!, dp[i - 1]! + SIZE_PRICE.A4);
+    dp[i] = Math.min(dp[i]!, dp[i - 1]! + prices.A4);
     if (i >= 2) dp[i] = Math.min(dp[i]!, dp[i - 2]! + 70);
     if (i >= 3) dp[i] = Math.min(dp[i]!, dp[i - 3]! + 109);
   }
   return dp[n]!;
 }
 
-export function priceFromCounts(counts: SizeCounts): {
+export function priceFromCounts(
+  counts: SizeCounts,
+  sizePrice: SizePriceMap = SIZE_PRICE,
+): {
   subtotal: number;
   shipping: number;
   total: number;
 } {
+  const prices: SizePriceMap = { ...SIZE_PRICE, ...sizePrice };
   let a4 = Math.max(0, counts.A4 | 0);
   let a5 = Math.max(0, counts.A5 | 0);
   let a6 = Math.max(0, counts.A6 | 0);
@@ -48,12 +54,12 @@ export function priceFromCounts(counts: SizeCounts): {
     a5 -= 1;
     a6 -= 1;
   }
-  cost += a4ComboCost(a4);
-  cost += a5 * SIZE_PRICE.A5;
-  cost += a6 * SIZE_PRICE.A6;
+  cost += a4ComboCost(a4, prices);
+  cost += a5 * prices.A5;
+  cost += a6 * prices.A6;
 
   if (cost > FREE_A6_THRESHOLD && a6InCart >= 1) {
-    cost = Math.max(0, cost - SIZE_PRICE.A6);
+    cost = Math.max(0, cost - prices.A6);
   }
 
   const shipping = cost >= SHIPPING_THRESHOLD ? 0 : SHIPPING_CHARGE;
@@ -62,10 +68,11 @@ export function priceFromCounts(counts: SizeCounts): {
 
 export function priceOrderLines(
   lines: { size: PosterSize; qty: number }[],
+  sizePrice: SizePriceMap = SIZE_PRICE,
 ): { subtotal: number; shipping: number; total: number } {
   const counts: SizeCounts = { A4: 0, A5: 0, A6: 0 };
   for (const line of lines) {
     counts[line.size] += line.qty;
   }
-  return priceFromCounts(counts);
+  return priceFromCounts(counts, sizePrice);
 }

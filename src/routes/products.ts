@@ -7,6 +7,7 @@ import { CATALOG_CATEGORIES } from "../lib/catalog.js";
 import { slugify, uniqueSlug } from "../lib/slug.js";
 import { processAndUploadImage } from "../lib/storage.js";
 import { toApiProduct, toApiCategories } from "../lib/serializers.js";
+import { getSizePriceMap } from "../lib/pricing-settings.js";
 import {
   isImageUpload,
   readMultipart,
@@ -172,6 +173,16 @@ async function uploadImages(productId: string, files: BufferedUpload[]) {
 }
 
 export async function productRoutes(app: FastifyInstance): Promise<void> {
+  app.get("/api/pricing", async () => {
+    const prices = await getSizePriceMap();
+    return {
+      sizePrice: prices,
+      shippingThreshold: 499,
+      shippingCharge: 80,
+      freeA6Threshold: 199,
+    };
+  });
+
   app.get("/api/products", async (request) => {
     const query = request.query as {
       category?: string;
