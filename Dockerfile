@@ -10,12 +10,14 @@ RUN npm ci
 FROM base AS build
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# prisma generate runs via npm run build; needs schema from COPY above
 RUN npm run build
 
 FROM base AS runner
 ENV NODE_ENV=production
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/generated ./generated
 COPY --from=build /app/prisma ./prisma
 COPY package.json ./
 EXPOSE 3001
