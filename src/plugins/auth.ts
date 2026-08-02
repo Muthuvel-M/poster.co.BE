@@ -38,6 +38,7 @@ function customerPayload(customer: {
   name: string;
   phone: string;
   avatarUrl?: string | null;
+  loyaltyPoints?: number;
 }) {
   return {
     id: customer.id,
@@ -45,6 +46,7 @@ function customerPayload(customer: {
     name: customer.name,
     phone: customer.phone,
     avatarUrl: customer.avatarUrl ?? undefined,
+    loyaltyPoints: customer.loyaltyPoints ?? 0,
   };
 }
 
@@ -154,14 +156,20 @@ export async function registerAuth(app: FastifyInstance): Promise<void> {
       { expiresIn: "7d" },
     );
 
-    return { token, email: admin.email, role: "admin" };
+    return { token, email: admin.email, role: admin.role };
   });
 
   app.get(
     "/api/admin/me",
     { preHandler: [app.authenticateAdmin] },
     async (request) => {
-      return { email: request.user.email, role: "admin" };
+      const admin = await prisma.admin.findUnique({
+        where: { id: request.user.sub },
+      });
+      return {
+        email: request.user.email,
+        role: admin?.role ?? "ADMIN",
+      };
     },
   );
 

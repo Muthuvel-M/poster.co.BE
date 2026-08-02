@@ -1,4 +1,4 @@
-import type { Category, Product, ProductSize, Size } from "@prisma/client";
+import type { Category, Product, ProductSize, Size } from "./db.js";
 import { CATALOG_CATEGORIES } from "./catalog.js";
 import { SIZE_PRICE } from "./pricing.js";
 
@@ -30,6 +30,7 @@ export type ApiProduct = {
   description: string;
   stock: number;
   status: Product["status"];
+  isBundle?: boolean;
   imageUrl?: string;
   thumbUrl?: string;
   cardUrl?: string;
@@ -75,6 +76,7 @@ export function toApiProduct(product: ProductWithCategory): ApiProduct {
     description: product.description,
     stock: product.stock,
     status: product.status,
+    isBundle: product.isBundle ?? false,
     imageUrl: primary?.cardUrl ?? primary?.url,
     thumbUrl: primary?.thumbUrl,
     cardUrl: primary?.cardUrl,
@@ -99,9 +101,12 @@ export function toApiCategories(categories: Category[]): ApiCategory[] {
     CATALOG_CATEGORIES.map((c, i) => [c.slug, i]),
   );
   return categories
-    .filter((c) => order.has(c.slug))
     .map((c) => ({ key: c.slug, label: c.name }))
-    .sort((a, b) => (order.get(a.key) ?? 99) - (order.get(b.key) ?? 99));
+    .sort(
+      (a, b) =>
+        (order.get(a.key) ?? 1000) - (order.get(b.key) ?? 1000) ||
+        a.label.localeCompare(b.label),
+    );
 }
 
 export { NEUTRAL_PALETTE };

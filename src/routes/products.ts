@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { ProductStatus, Size } from "@prisma/client";
+import { ProductStatus, Size } from "../lib/db.js";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
@@ -174,42 +174,77 @@ async function uploadImages(productId: string, files: BufferedUpload[]) {
 
 export async function productRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/pricing", async () => {
-    const prices = await getSizePriceMap();
+    const { getFullPricingSettings } = await import(
+      "../lib/pricing-settings.js"
+    );
+    const full = await getFullPricingSettings();
     return {
-      sizePrice: prices,
-      shippingThreshold: 499,
-      shippingCharge: 80,
-      freeA6Threshold: 199,
+      sizePrice: { A4: full.A4, A5: full.A5, A6: full.A6 },
+      shippingThreshold: full.shippingThreshold,
+      shippingCharge: full.shippingCharge,
+      freeA6Threshold: full.freeA6Threshold,
+      comboMixed: full.comboMixed,
+      comboMini: full.comboMini,
+      a4Pack2: full.a4Pack2,
+      a4Pack3: full.a4Pack3,
     };
   });
 
   app.get("/api/products", async (request) => {
     const query = request.query as {
       category?: string;
-      includeArchived?: string;
+      q?: string;
+      page?: string;
+      pageSize?: string;
     };
     const categoryKey = query.category;
+    const paginate = query.page !== undefined || query.pageSize !== undefined;
+    const page = Math.max(1, Number(query.page) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(query.pageSize) || 48));
+    const skip = (page - 1) * pageSize;
+    const q = query.q?.trim().toLowerCase();
 
-    const [products, categories] = await Promise.all([
+    const where = {
+      status: ProductStatus.ACTIVE,
+      ...(categoryKey && categoryKey !== "all"
+        ? { category: { slug: categoryKey } }
+        : {}),
+    };
+
+    const [allMatching, categories] = await Promise.all([
       prisma.product.findMany({
-        where: {
-          status:
-            query.includeArchived === "true"
-              ? undefined
-              : ProductStatus.ACTIVE,
-          ...(categoryKey && categoryKey !== "all"
-            ? { category: { slug: categoryKey } }
-            : {}),
-        },
+        where,
         include: productInclude,
         orderBy: { createdAt: "desc" },
       }),
       prisma.category.findMany({ orderBy: { name: "asc" } }),
     ]);
 
+    const filtered = q
+      ? allMatching.filter(
+          (p) =>
+            p.title.toLowerCase().includes(q) ||
+            p.description.toLowerCase().includes(q) ||
+            p.category.name.toLowerCase().includes(q),
+        )
+      : allMatching;
+
+    const total = filtered.length;
+    const pageItems = paginate
+      ? filtered.slice(skip, skip + pageSize)
+      : filtered;
+
     return {
-      posters: products.map(toApiProduct),
+      posters: pageItems.map(toApiProduct),
       categories: toApiCategories(categories),
+      ...(paginate
+        ? {
+            page,
+            pageSize,
+            total,
+            totalPages: Math.ceil(total / pageSize) || 1,
+          }
+        : { total }),
     };
   });
 

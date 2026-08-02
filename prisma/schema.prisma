@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  output   = "../generated/prisma"
 }
 
 datasource db {
@@ -22,6 +23,7 @@ enum OrderStatus {
   PENDING
   CONFIRMED
   SHIPPED
+  DELIVERED
   CANCELLED
 }
 
@@ -29,6 +31,18 @@ enum ReviewStatus {
   PENDING
   APPROVED
   HIDDEN
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum CouponType {
+  PERCENT
+  FIXED
 }
 
 type ProductSize {
@@ -67,24 +81,28 @@ type OrderCustomer {
 }
 
 model Admin {
-  id           String   @id @default(cuid()) @map("_id")
-  email        String   @unique
+  id           String    @id @default(cuid()) @map("_id")
+  email        String    @unique
   passwordHash String
-  createdAt    DateTime @default(now())
+  role         AdminRole @default(ADMIN)
+  createdAt    DateTime  @default(now())
 }
 
 model Customer {
-  id           String   @id @default(cuid()) @map("_id")
-  email        String   @unique
+  id           String         @id @default(cuid()) @map("_id")
+  email        String         @unique
   passwordHash String?
-  googleId     String?  @unique
+  googleId     String?        @unique
   name         String
-  phone        String   @default("")
+  phone        String         @default("")
   avatarUrl    String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  loyaltyPoints Int           @default(0)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
   orders       Order[]
   reviews      Review[]
+  wishlist     WishlistItem[]
+  resetTokens  PasswordResetToken[]
 }
 
 model Category {
@@ -106,9 +124,12 @@ model Product {
   category    Category       @relation(fields: [categoryId], references: [id])
   stock       Int            @default(0)
   status      ProductStatus  @default(ACTIVE)
+  isBundle    Boolean        @default(false)
+  bundleIds   String[]
   sizes       ProductSize[]
   images      ProductImage[]
   reviews     Review[]
+  wishlist    WishlistItem[]
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 }
@@ -122,8 +143,11 @@ model Order {
   lines            OrderLine[]
   subtotal         Int
   shipping         Int
+  discount         Int           @default(0)
+  couponCode       String?
   total            Int
   status           OrderStatus   @default(PENDING)
+  trackingNumber   String?
   whatsappOpenedAt DateTime?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
@@ -155,10 +179,83 @@ model Faq {
 }
 
 model PricingSettings {
-  id        String   @id @default(cuid()) @map("_id")
-  priceA4   Int
-  priceA5   Int
-  priceA6   Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                String   @id @default(cuid()) @map("_id")
+  priceA4           Int
+  priceA5           Int
+  priceA6           Int
+  shippingThreshold Int      @default(499)
+  shippingCharge    Int      @default(80)
+  freeA6Threshold   Int      @default(199)
+  comboMixed        Int      @default(69)
+  comboMini         Int      @default(39)
+  a4Pack2           Int      @default(70)
+  a4Pack3           Int      @default(109)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model Coupon {
+  id             String     @id @default(cuid()) @map("_id")
+  code           String     @unique
+  type           CouponType
+  value          Int
+  minOrder       Int        @default(0)
+  maxUses        Int?
+  usedCount      Int        @default(0)
+  active         Boolean    @default(true)
+  expiresAt      DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+}
+
+model WishlistItem {
+  id         String   @id @default(cuid()) @map("_id")
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id])
+  createdAt  DateTime @default(now())
+
+  @@unique([customerId, productId])
+}
+
+model PasswordResetToken {
+  id         String   @id @default(cuid()) @map("_id")
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(cuid()) @map("_id")
+  actorId    String?
+  actorEmail String?
+  action     String
+  entity     String
+  entityId   String?
+  meta       Json?
+  createdAt  DateTime @default(now())
+}
+
+model GiftCard {
+  id            String    @id @default(cuid()) @map("_id")
+  code          String    @unique
+  initialBalance Int
+  balance       Int
+  active        Boolean   @default(true)
+  expiresAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model LoyaltyTransaction {
+  id         String   @id @default(cuid()) @map("_id")
+  customerId String
+  points     Int
+  reason     String
+  orderId    String?
+  createdAt  DateTime @default(now())
 }

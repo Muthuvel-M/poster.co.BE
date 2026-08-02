@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { ReviewStatus } from "@prisma/client";
+import { ReviewStatus } from "../lib/db.js";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 

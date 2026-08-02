@@ -1,10 +1,15 @@
 import type { FastifyInstance } from "fastify";
-import { ProductStatus, Size } from "@prisma/client";
+import { ProductStatus, Size } from "../lib/db.js";
 import { randomUUID } from "node:crypto";
 import { prisma } from "../lib/prisma.js";
 import { CATALOG_CATEGORIES } from "../lib/catalog.js";
-import { getSizePriceMap, saveSizePriceMap } from "../lib/pricing-settings.js";
+import {
+  getFullPricingSettings,
+  getSizePriceMap,
+  saveFullPricingSettings,
+} from "../lib/pricing-settings.js";
 import type { SizePriceMap } from "../lib/pricing.js";
+import { writeAuditLog } from "../lib/audit.js";
 import { slugify, uniqueSlug } from "../lib/slug.js";
 import { processAndUploadImage } from "../lib/storage.js";
 import { toApiProduct } from "../lib/serializers.js";
@@ -196,8 +201,17 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     "/api/admin/pricing",
     { preHandler: [app.authenticateAdmin] },
     async () => {
-      const sizePrice = await getSizePriceMap();
-      return toApiPricing(sizePrice);
+      const full = await getFullPricingSettings();
+      return {
+        ...toApiPricing({ A4: full.A4, A5: full.A5, A6: full.A6 }),
+        shippingThreshold: full.shippingThreshold,
+        shippingCharge: full.shippingCharge,
+        freeA6Threshold: full.freeA6Threshold,
+        comboMixed: full.comboMixed,
+        comboMini: full.comboMini,
+        a4Pack2: full.a4Pack2,
+        a4Pack3: full.a4Pack3,
+      };
     },
   );
 
@@ -205,32 +219,178 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     "/api/admin/pricing",
     { preHandler: [app.authenticateAdmin] },
     async (request, reply) => {
-      const body = request.body as
-        | {
-            priceA4?: unknown;
-            priceA5?: unknown;
-            priceA6?: unknown;
-          }
-        | undefined;
+      const body = request.body as Record<string, unknown> | undefined;
 
-      const priceA4 = Number(body?.priceA4);
-      const priceA5 = Number(body?.priceA5);
-      const priceA6 = Number(body?.priceA6);
-      const values = [priceA4, priceA5, priceA6];
-      if (
-        values.some((n) => Number.isNaN(n) || !Number.isInteger(n) || n < 1)
-      ) {
-        return reply.code(400).send({
-          error: "Body must be { priceA4, priceA5, priceA6 } with positive integers",
-        });
+      const priceA4 = body?.priceA4 !== undefined ? Number(body.priceA4) : undefined;
+      const priceA5 = body?.priceA5 !== undefined ? Number(body.priceA5) : undefined;
+      const priceA6 = body?.priceA6 !== undefined ? Number(body.priceA6) : undefined;
+
+      for (const [label, n] of [
+        ["priceA4", priceA4],
+        ["priceA5", priceA5],
+        ["priceA6", priceA6],
+      ] as const) {
+        if (n !== undefined && (Number.isNaN(n) || !Number.isInteger(n) || n < 1)) {
+          return reply.code(400).send({ error: `${label} must be a positive integer` });
+        }
       }
 
-      const saved = await saveSizePriceMap({
-        A4: priceA4,
-        A5: priceA5,
-        A6: priceA6,
+      const intField = (key: string) => {
+        if (body?.[key] === undefined) return undefined;
+        const n = Number(body[key]);
+        if (Number.isNaN(n) || !Number.isInteger(n) || n < 0) return null;
+        return n;
+      };
+
+      const shippingThreshold = intField("shippingThreshold");
+      const shippingCharge = intField("shippingCharge");
+      const freeA6Threshold = intField("freeA6Threshold");
+      const comboMixed = intField("comboMixed");
+      const comboMini = intField("comboMini");
+      const a4Pack2 = intField("a4Pack2");
+      const a4Pack3 = intField("a4Pack3");
+
+      for (const [label, n] of [
+        ["shippingThreshold", shippingThreshold],
+        ["shippingCharge", shippingCharge],
+        ["freeA6Threshold", freeA6Threshold],
+        ["comboMixed", comboMixed],
+        ["comboMini", comboMini],
+        ["a4Pack2", a4Pack2],
+        ["a4Pack3", a4Pack3],
+      ] as const) {
+        if (n === null) {
+          return reply.code(400).send({ error: `${label} must be a non-negative integer` });
+        }
+      }
+
+      const saved = await saveFullPricingSettings({
+        ...(priceA4 !== undefined ? { A4: priceA4 } : {}),
+        ...(priceA5 !== undefined ? { A5: priceA5 } : {}),
+        ...(priceA6 !== undefined ? { A6: priceA6 } : {}),
+        ...(typeof shippingThreshold === "number"
+          ? { shippingThreshold }
+          : {}),
+        ...(typeof shippingCharge === "number" ? { shippingCharge } : {}),
+        ...(typeof freeA6Threshold === "number" ? { freeA6Threshold } : {}),
+        ...(typeof comboMixed === "number" ? { comboMixed } : {}),
+        ...(typeof comboMini === "number" ? { comboMini } : {}),
+        ...(typeof a4Pack2 === "number" ? { a4Pack2 } : {}),
+        ...(typeof a4Pack3 === "number" ? { a4Pack3 } : {}),
       });
-      return toApiPricing(saved);
+
+      await writeAuditLog({
+        actorId: request.user.sub,
+        actorEmail: request.user.email,
+        action: "pricing.update",
+        entity: "PricingSettings",
+        entityId: "global",
+      });
+
+      return {
+        ...toApiPricing({ A4: saved.A4, A5: saved.A5, A6: saved.A6 }),
+        shippingThreshold: saved.shippingThreshold,
+        shippingCharge: saved.shippingCharge,
+        freeA6Threshold: saved.freeA6Threshold,
+        comboMixed: saved.comboMixed,
+        comboMini: saved.comboMini,
+        a4Pack2: saved.a4Pack2,
+        a4Pack3: saved.a4Pack3,
+      };
+    },
+  );
+
+  app.get(
+    "/api/admin/categories",
+    { preHandler: [app.authenticateAdmin] },
+    async () => {
+      const categories = await prisma.category.findMany({
+        orderBy: { name: "asc" },
+        include: { _count: { select: { products: true } } },
+      });
+      return {
+        categories: categories.map((c) => ({
+          id: c.id,
+          name: c.name,
+          slug: c.slug,
+          productCount: c._count.products,
+        })),
+      };
+    },
+  );
+
+  app.post(
+    "/api/admin/categories",
+    { preHandler: [app.authenticateAdmin] },
+    async (request, reply) => {
+      const body = request.body as { name?: string } | undefined;
+      const name = body?.name?.trim();
+      if (!name) return reply.code(400).send({ error: "name is required" });
+      const slug = slugify(name) || "category";
+      const existing = await prisma.category.findUnique({ where: { slug } });
+      if (existing) {
+        return reply.code(409).send({ error: "Category already exists" });
+      }
+      const category = await prisma.category.create({ data: { name, slug } });
+      await writeAuditLog({
+        actorId: request.user.sub,
+        actorEmail: request.user.email,
+        action: "category.create",
+        entity: "Category",
+        entityId: category.id,
+      });
+      return reply.code(201).send(category);
+    },
+  );
+
+  app.patch(
+    "/api/admin/categories/:id",
+    { preHandler: [app.authenticateAdmin] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const body = request.body as { name?: string } | undefined;
+      const name = body?.name?.trim();
+      if (!name) return reply.code(400).send({ error: "name is required" });
+      const slug = slugify(name) || "category";
+      try {
+        const category = await prisma.category.update({
+          where: { id },
+          data: { name, slug },
+        });
+        return category;
+      } catch {
+        return reply.code(404).send({ error: "Category not found" });
+      }
+    },
+  );
+
+  app.delete(
+    "/api/admin/categories/:id",
+    { preHandler: [app.authenticateAdmin] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const count = await prisma.product.count({ where: { categoryId: id } });
+      if (count > 0) {
+        return reply
+          .code(400)
+          .send({ error: "Move or archive products before deleting category" });
+      }
+      await prisma.category.delete({ where: { id } });
+      return reply.code(204).send();
+    },
+  );
+
+  app.get(
+    "/api/admin/audit-logs",
+    { preHandler: [app.authenticateAdmin] },
+    async (request) => {
+      const query = request.query as { limit?: string };
+      const limit = Math.min(200, Math.max(1, Number(query.limit) || 50));
+      const logs = await prisma.auditLog.findMany({
+        orderBy: { createdAt: "desc" },
+        take: limit,
+      });
+      return { logs };
     },
   );
 
@@ -252,19 +412,41 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         prisma.faq.count({ where: { published: true } }),
         prisma.product.count({ where: { status: "ACTIVE" } }),
         prisma.order.findMany({
-          select: { total: true, status: true, createdAt: true },
+          select: { total: true, status: true, createdAt: true, lines: true },
           orderBy: { createdAt: "desc" },
-          take: 100,
         }),
       ]);
 
-      const revenue = orderAgg
-        .filter((o) => o.status !== "CANCELLED")
-        .reduce((s, o) => s + o.total, 0);
+      const activeOrders = orderAgg.filter((o) => o.status !== "CANCELLED");
+      const revenue = activeOrders.reduce((s, o) => s + o.total, 0);
+      const aov =
+        activeOrders.length > 0
+          ? Math.round(revenue / activeOrders.length)
+          : 0;
 
-      const recentOrders = orderAgg.slice(0, 14);
+      const productSales = new Map<string, { title: string; qty: number }>();
+      for (const o of activeOrders) {
+        for (const line of o.lines) {
+          const cur = productSales.get(line.productId) ?? {
+            title: line.title,
+            qty: 0,
+          };
+          cur.qty += line.qty;
+          productSales.set(line.productId, cur);
+        }
+      }
+      const topProducts = [...productSales.entries()]
+        .sort((a, b) => b[1].qty - a[1].qty)
+        .slice(0, 10)
+        .map(([productId, v]) => ({
+          productId,
+          title: v.title,
+          qty: v.qty,
+        }));
+
+      const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
       const byDay = new Map<string, number>();
-      for (const o of recentOrders) {
+      for (const o of orderAgg.filter((o) => o.createdAt >= since)) {
         const day = o.createdAt.toISOString().slice(0, 10);
         byDay.set(day, (byDay.get(day) ?? 0) + 1);
       }
@@ -273,9 +455,11 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         customers,
         orders,
         revenue,
+        aov,
         pendingReviews,
         faqs,
         products,
+        topProducts,
         ordersByDay: [...byDay.entries()]
           .map(([date, count]) => ({ date, count }))
           .sort((a, b) => a.date.localeCompare(b.date)),

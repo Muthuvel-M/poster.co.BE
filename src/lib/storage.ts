@@ -56,7 +56,10 @@ async function uploadBufferLocal(key: string, buffer: Buffer): Promise<string> {
   const filePath = path.join(config.uploadDir, key);
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, buffer);
-  return `http://localhost:${config.port}/uploads/${key}`;
+  const base =
+    process.env.PUBLIC_API_URL?.replace(/\/$/, "") ||
+    `http://localhost:${config.port}`;
+  return `${base}/uploads/${key}`;
 }
 
 async function uploadBuffer(key: string, buffer: Buffer): Promise<string> {
