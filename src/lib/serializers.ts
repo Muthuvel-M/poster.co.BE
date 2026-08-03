@@ -1,6 +1,6 @@
 import type { Category, Product, ProductSize, Size } from "./db.js";
 import { CATALOG_CATEGORIES } from "./catalog.js";
-import { SIZE_PRICE } from "./pricing.js";
+import { SIZE_PRICE, type SizePriceMap } from "./pricing.js";
 
 export type ApiProductSize = {
   size: Size;
@@ -50,15 +50,27 @@ type ProductWithCategory = Product & {
 
 const NEUTRAL_PALETTE = { bg: "#eae6d7", fg: "#1a1410", accent: "#6b7280" };
 
-export function displayPrice(sizes: ProductSize[]): number {
+export function displayPrice(
+  sizes: ProductSize[],
+  global?: SizePriceMap,
+): number {
   const a5 = sizes.find((s) => s.size === "A5");
-  if (a5) return a5.discountedPrice ?? a5.price ?? SIZE_PRICE.A5;
+  if (a5) {
+    if (a5.discountedPrice != null) return a5.discountedPrice;
+    if (global) return global.A5;
+    return a5.price ?? SIZE_PRICE.A5;
+  }
   const first = sizes[0];
-  if (!first) return SIZE_PRICE.A5;
-  return first.discountedPrice ?? first.price ?? SIZE_PRICE[first.size];
+  if (!first) return global?.A5 ?? SIZE_PRICE.A5;
+  if (first.discountedPrice != null) return first.discountedPrice;
+  if (global) return global[first.size] ?? SIZE_PRICE[first.size];
+  return first.price ?? SIZE_PRICE[first.size];
 }
 
-export function toApiProduct(product: ProductWithCategory): ApiProduct {
+export function toApiProduct(
+  product: ProductWithCategory,
+  globalPrice?: SizePriceMap,
+): ApiProduct {
   const images = [...product.images].sort((a, b) => a.sortOrder - b.sortOrder);
   const primary = images[0];
 
@@ -70,7 +82,7 @@ export function toApiProduct(product: ProductWithCategory): ApiProduct {
     subtitle: product.subtitle ?? product.category.name,
     year: product.year ?? new Date(product.createdAt).getFullYear(),
     artist: product.artist ?? product.category.name,
-    price: displayPrice(product.sizes),
+    price: displayPrice(product.sizes, globalPrice),
     category: product.category.name,
     categoryKey: product.category.slug,
     description: product.description,
@@ -83,7 +95,7 @@ export function toApiProduct(product: ProductWithCategory): ApiProduct {
     fullUrl: primary?.url,
     sizes: product.sizes.map((s) => ({
       size: s.size,
-      price: s.price,
+      price: globalPrice?.[s.size] ?? s.price,
       discountedPrice: s.discountedPrice ?? null,
     })),
     images: images.map((img) => ({

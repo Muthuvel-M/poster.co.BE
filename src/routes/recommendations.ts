@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { ProductStatus } from "../lib/db.js";
 import { prisma } from "../lib/prisma.js";
 import { toApiProduct } from "../lib/serializers.js";
+import { getSizePriceMap } from "../lib/pricing-settings.js";
 
 const productInclude = { category: true } as const;
 
@@ -78,8 +79,9 @@ export async function recommendationRoutes(
       }
     }
 
+    const sizePrice = await getSizePriceMap();
     return {
-      recommendations: related.map(toApiProduct),
+      recommendations: related.map((p) => toApiProduct(p, sizePrice)),
       source: rankedIds.length ? "co-purchase" : "category",
     };
   });
@@ -121,6 +123,7 @@ export async function recommendationRoutes(
       .map((id) => products.find((p) => p.id === id))
       .filter(Boolean);
 
-    return { posters: ordered.map((p) => toApiProduct(p!)) };
+    const sizePrice = await getSizePriceMap();
+    return { posters: ordered.map((p) => toApiProduct(p!, sizePrice)) };
   });
 }

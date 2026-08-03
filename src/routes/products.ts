@@ -234,8 +234,10 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
       ? filtered.slice(skip, skip + pageSize)
       : filtered;
 
+    const sizePrice = await getSizePriceMap();
+
     return {
-      posters: pageItems.map(toApiProduct),
+      posters: pageItems.map((p) => toApiProduct(p, sizePrice)),
       categories: toApiCategories(categories),
       ...(paginate
         ? {
@@ -259,7 +261,8 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
     });
 
     if (!product) return reply.code(404).send({ error: "Product not found" });
-    return toApiProduct(product);
+    const sizePrice = await getSizePriceMap();
+    return toApiProduct(product, sizePrice);
   });
 
   app.post(
@@ -484,7 +487,7 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
         include: productInclude,
         orderBy: { createdAt: "desc" },
       });
-      return { products: products.map(toApiProduct) };
+      return { products: products.map((p) => toApiProduct(p)) };
     },
   );
 }

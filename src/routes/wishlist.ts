@@ -3,6 +3,7 @@ import { ProductStatus } from "../lib/db.js";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { toApiProduct } from "../lib/serializers.js";
+import { getSizePriceMap } from "../lib/pricing-settings.js";
 
 const productInclude = { category: true } as const;
 
@@ -11,11 +12,14 @@ export async function wishlistRoutes(app: FastifyInstance): Promise<void> {
     "/api/wishlist",
     { preHandler: [app.authenticateCustomer] },
     async (request) => {
-      const items = await prisma.wishlistItem.findMany({
-        where: { customerId: request.user.sub },
-        include: { product: { include: productInclude } },
-        orderBy: { createdAt: "desc" },
-      });
+      const [items, sizePrice] = await Promise.all([
+        prisma.wishlistItem.findMany({
+          where: { customerId: request.user.sub },
+          include: { product: { include: productInclude } },
+          orderBy: { createdAt: "desc" },
+        }),
+        getSizePriceMap(),
+      ]);
       return {
         items: items
           .filter((i) => i.product.status === ProductStatus.ACTIVE)
@@ -23,7 +27,7 @@ export async function wishlistRoutes(app: FastifyInstance): Promise<void> {
             id: i.id,
             productId: i.productId,
             createdAt: i.createdAt,
-            product: toApiProduct(i.product),
+            product: toApiProduct(i.product, sizePrice),
           })),
       };
     },
